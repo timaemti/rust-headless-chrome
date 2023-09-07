@@ -19,6 +19,7 @@ use serde_json::{json, Value as Json};
 use element::Element;
 use point::Point;
 
+use crate::protocol::cdp::Emulation::UserAgentMetadata;
 use crate::protocol::cdp::{
     types::{Event, Method},
     Browser, Debugger, Emulation, Fetch, Input, Log, Network, Page, Profiler, Runtime, Target, DOM,
@@ -47,8 +48,10 @@ use Fetch::{
 
 use Network::{
     events::LoadingFailedEventParams, events::ResponseReceivedEventParams, Cookie, GetResponseBody,
-    GetResponseBodyReturnObject, SetExtraHTTPHeaders, SetUserAgentOverride,
+    GetResponseBodyReturnObject, SetExtraHTTPHeaders,
 };
+
+use Emulation::SetUserAgentOverride;
 
 use crate::util;
 
@@ -276,12 +279,13 @@ impl Tab {
         user_agent: &str,
         accept_language: Option<&str>,
         platform: Option<&str>,
+        user_agent_metadata: Option<UserAgentMetadata>,
     ) -> Result<()> {
         self.call_method(SetUserAgentOverride {
             user_agent: user_agent.to_string(),
             accept_language: accept_language.map(std::string::ToString::to_string),
             platform: platform.map(std::string::ToString::to_string),
-            user_agent_metadata: None,
+            user_agent_metadata,
         })
         .map(|_| ())
     }
@@ -929,6 +933,31 @@ impl Tab {
             location: None,
             commands: None,
         })?;
+        Ok(self)
+    }
+
+    pub fn wheel_mouse(&self, point: Point, delta_point_x: Option<f64>, delta_point_y: Option<f64>) -> Result<&Self> {
+        self.move_mouse_to_point(point)?;
+
+        self.call_method(Input::DispatchMouseEvent {
+            Type: Input::DispatchMouseEventTypeOption::MouseWheel,
+            x: point.x,
+            y: point.y,
+            modifiers: None,
+            timestamp: None,
+            button: None,
+            buttons: None,
+            click_count: None,
+            force: None,
+            tangential_pressure: None,
+            tilt_x: None,
+            tilt_y: None,
+            twist: None,
+            delta_x: delta_point_x,
+            delta_y: delta_point_y,
+            pointer_Type: None,
+        })?;
+
         Ok(self)
     }
 
@@ -1738,7 +1767,7 @@ impl Tab {
                 let re = regex::Regex::new(r"\(([^)]+)\)")?;
                 ua = re.replace(&ua, "(Windows NT 10.0; Win64; x64)").to_string();
 
-                self.set_user_agent(&ua, None, None)?;
+                self.set_user_agent(&ua, None, None, None)?;
                 Ok(())
             }
             None => Err(NoUserAgentEvaluated {}.into()),
